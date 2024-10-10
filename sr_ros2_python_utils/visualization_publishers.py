@@ -15,11 +15,11 @@
 from typing import Tuple
 
 from builtin_interfaces.msg import Duration
+from builtin_interfaces.msg import Time as TimeMsg
 from rclpy.node import Node
 from geometry_msgs.msg import Point, PoseStamped, Pose, TransformStamped, Vector3Stamped
 from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 from visualization_msgs.msg import Marker
-
 
 class VisualizatonPublisher:
 
@@ -91,6 +91,44 @@ class VisualizatonPublisher:
         # Publish the marker
         self.marker_publisher.publish(marker)
 
+    @staticmethod
+    def calculate_transform_manually_stamped_from_pose(timeMsg: TimeMsg, pose: Pose, frame_id: str, child_frame_id: str) -> TransformStamped:
+        transformStamped = TransformStamped()
+        transformStamped.header.stamp = timeMsg
+        transformStamped.header.frame_id = frame_id
+        transformStamped.child_frame_id = child_frame_id
+        transformStamped.transform.translation.x = pose.position.x
+        transformStamped.transform.translation.y = pose.position.y
+        transformStamped.transform.translation.z = pose.position.z
+        transformStamped.transform.rotation.x = pose.orientation.x
+        transformStamped.transform.rotation.y = pose.orientation.y
+        transformStamped.transform.rotation.z = pose.orientation.z
+        transformStamped.transform.rotation.w = pose.orientation.w  
+        return transformStamped
+    
+    def calculate_transform_stamped_from_pose(self, pose: Pose, frame_id: str, child_frame_id: str) -> TransformStamped:
+        return self.calculate_transform_manually_stamped_from_pose(self.node.get_clock().now().to_msg(), pose, frame_id, child_frame_id)
+    
+    def calculate_transform_stamped_from_pose_stamped(self, poseStamped: PoseStamped, child_frame_id: str) -> TransformStamped:
+        return self.calculate_transform_manually_stamped_from_pose(self.node.get_clock().now().to_msg(), poseStamped.pose, poseStamped.header.frame_id, child_frame_id)
+    
+    def publish_transform(self, transformStamped: TransformStamped, frame_id: str, is_static: bool = False) -> bool:
+        if is_static:
+            # check if the transform already exists
+            pair = (frame_id, transformStamped.child_frame_id)
+            tf_exists = False
+            for key in self.tf_static_broadcasters.keys():
+                if pair == key:
+                    tf_exists = True
+                    break
+            if not tf_exists:
+                # create a new static broadcaster
+                self.tf_static_broadcasters[pair] = StaticTransformBroadcaster(self.node)
+            self.tf_static_broadcasters[pair].sendTransform(transformStamped)
+        else:
+            self.tf_broadcaster.sendTransform(transformStamped)
+        return True
+
     def publish_pose_as_transform(
         self, pose: Pose, frame_id: str, child_frame_id: str, is_static: bool = False
     ) -> bool:
@@ -101,36 +139,10 @@ class VisualizatonPublisher:
         :param frame_id: Frame in which pose is given.
         :param child_frame_id: Name of the frame that Pose defines.
         """
-
-        trafo = TransformStamped()
-        trafo.header.stamp = self.node.get_clock().now().to_msg()
-        trafo.header.frame_id = frame_id
-        trafo.child_frame_id = child_frame_id
-
-        trafo.transform.translation.x = pose.position.x
-        trafo.transform.translation.y = pose.position.y
-        trafo.transform.translation.z = pose.position.z
-        trafo.transform.rotation.x = pose.orientation.x
-        trafo.transform.rotation.y = pose.orientation.y
-        trafo.transform.rotation.z = pose.orientation.z
-        trafo.transform.rotation.w = pose.orientation.w
-
-        if is_static:
-            # check if the transform already exists
-            pair = (frame_id, child_frame_id)
-            tf_exists = False
-            for key in self.tf_static_broadcasters.keys():
-                if pair == key:
-                    tf_exists = True
-                    break
-            if not tf_exists:
-                # create a new static broadcaster
-                self.tf_static_broadcasters[pair] = StaticTransformBroadcaster(self.node)
-            self.tf_static_broadcasters[pair].sendTransform(trafo)
-        else:
-            self.tf_broadcaster.sendTransform(trafo)
-        return True
-
+        
+        trafo = self.calculate_transform_stamped_from_pose(pose, frame_id, child_frame_id)
+        return self.publish_transform(trafo, frame_id, child_frame_id, is_static)
+        
     def publish_pose_stamped_as_transform(
         self, pose: PoseStamped, child_frame_id: str, is_static: bool = False
     ) -> bool:
