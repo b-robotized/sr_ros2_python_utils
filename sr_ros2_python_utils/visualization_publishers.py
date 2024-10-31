@@ -141,7 +141,7 @@ class VisualizatonPublisher:
         """
         
         trafo = self.calculate_transform_stamped_from_pose(pose, frame_id, child_frame_id)
-        return self.publish_transform(trafo, frame_id, child_frame_id, is_static)
+        return self.publish_transform(trafo, frame_id, is_static)
         
     def publish_pose_stamped_as_transform(
         self, pose: PoseStamped, child_frame_id: str, is_static: bool = False
