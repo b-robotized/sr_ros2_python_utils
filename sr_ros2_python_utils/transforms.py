@@ -237,7 +237,7 @@ class TCPTransforms:
         pose_source_frame: Pose,
         source_frame: str,
         target_frame: str,
-        apply_tool_offset: bool,
+        apply_tool_offset: bool = True,
     ) -> Pose:
         """apply_tool_tf is used when pose source should be first transformed locally with a tool offset"""
 
